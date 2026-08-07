@@ -1,0 +1,10 @@
+[server]
+# Matches MAX_FILE_MB in src/config.py — keep the two in sync.
+maxUploadSize = 10
+
+[theme]
+base = "light"
+primaryColor = "#4A6FE3"
+
+[browser]
+gatherUsageStats = false
