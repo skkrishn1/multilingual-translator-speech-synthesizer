@@ -28,16 +28,23 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+      /* Translucent rather than a fixed colour, so the box still reads correctly if the
+         theme in .streamlit/config.toml is switched back to light. */
       .result-box {
-        background: rgba(128, 128, 128, 0.08);
-        border: 1px solid rgba(128, 128, 128, 0.25);
-        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
         padding: 1rem 1.25rem;
-        line-height: 1.7;
+        line-height: 1.8;
         font-size: 1.02rem;
         white-space: pre-wrap;
         max-height: 26rem;
         overflow-y: auto;
+      }
+      /* Non-Latin scripts (Tamil, Hindi, Arabic) render small at the default size. */
+      .result-box[dir="rtl"] {
+        font-size: 1.15rem;
+        line-height: 2;
       }
     </style>
     """,

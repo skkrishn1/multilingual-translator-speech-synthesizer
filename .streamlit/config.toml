@@ -3,8 +3,12 @@
 maxUploadSize = 10
 
 [theme]
-base = "light"
-primaryColor = "#4A6FE3"
+base = "dark"
+# Lightened from the original indigo so it keeps contrast against a dark background.
+primaryColor = "#7C9CFF"
+backgroundColor = "#0F1218"
+secondaryBackgroundColor = "#191E29"
+textColor = "#E6E9EF"
 
 [browser]
 gatherUsageStats = false
