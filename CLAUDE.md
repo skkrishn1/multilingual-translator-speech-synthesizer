@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phases 0–4 and 6 of `PLAN.md` are done: all modules, the UI, 57 passing tests, sample
-fixtures, and the README. Outstanding: live end-to-end verification with a real API key,
-and Phase 5 deployment. `PLAN.md` remains the design spec — update it if a decision changes.
+Phases 0–4 and 6 of `PLAN.md` are done: all modules, the UI, 72 passing tests, sample
+fixtures, and the README. Phase 5 is in progress — the code is pushed to the public GitHub
+repo; outstanding is the Streamlit Cloud deploy itself and live end-to-end verification
+with a real API key. `PLAN.md` remains the design spec — update it if a decision changes.
 
 This is a graded PGP capstone. The brief requires a documentation deliverable covering
 setup, the Gemini API key, **limitations**, and **challenges faced** — the last two are
@@ -16,11 +17,16 @@ graded sections, not filler, and live in `README.md`.
 
 - `python` is **not** on PATH — it resolves to the Microsoft Store shim and fails. Use
   `py -3.14`, or `.\.venv\Scripts\python.exe` directly.
-- Local interpreter is Python 3.14.2, but **Streamlit Community Cloud caps at 3.13**.
-  `runtime.txt` pins 3.13 — avoid 3.14-only syntax.
+- Local interpreter is Python 3.14.2 and the deployment targets **3.14** to match, so the
+  old "avoid 3.14-only syntax" rule no longer applies. Cloud supports 3.10–3.14.
+  **`runtime.txt` does not set the version** — Streamlit Cloud ignores it; the version comes
+  from the Advanced settings dropdown at deploy time and cannot be changed without deleting
+  and redeploying the app. The file is kept only as a record of the tested interpreter.
 - The venv is at `.venv`; only Python 3.14 is installed locally.
 - `.env` holds the key locally and is gitignored, as is `.streamlit/secrets.toml`. Never
-  stage either. Nothing has been committed or pushed yet — the tree is staged only.
+  stage either. The work is committed and pushed to the public repo
+  `skkrishn1/multilingual-translator-speech-synthesizer` (`origin/main`); history has been
+  checked and contains no key.
 
 ## Commands
 

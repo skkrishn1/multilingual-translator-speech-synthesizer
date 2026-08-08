@@ -63,7 +63,7 @@ Capstone_Project/
 ├── sample_files/              # fixtures for the manual test matrix
 ├── .streamlit/config.toml     # theme + upload size cap
 ├── requirements.txt
-├── runtime.txt                # pins Python 3.13 for deployment
+├── runtime.txt                # records the tested Python version (Cloud ignores it)
 ├── .env.example
 ├── .gitignore                 # must exclude .env and secrets.toml
 └── README.md                  # the documentation deliverable
@@ -140,7 +140,8 @@ and rejoins in order. `tts.py` does the same for audio and concatenates the MP3 
 
 - Push to a public GitHub repository
 - Deploy on **Streamlit Community Cloud** (free); add the API key via the Secrets UI
-- Pin Python 3.13 in `runtime.txt` — see the risk note below
+- Select the Python version in the **Advanced settings** dialog when creating the app —
+  `runtime.txt` is ignored by Community Cloud; see the risk note below
 - Verify the deployed app end-to-end
 
 ### Phase 6 — Documentation
@@ -184,10 +185,14 @@ parallelism — the UI can be built against stub functions while the translator 
 
 ## 4. Risks
 
-**Streamlit Cloud does not run Python 3.14.** Your local interpreter is 3.14.2 and all
-dependencies resolve there, but Streamlit Community Cloud supports up to 3.13. Pinning `3.13`
-in `runtime.txt` from the start avoids a deployment-day surprise. Nothing in this project
-needs 3.14 features.
+**~~Streamlit Cloud does not run Python 3.14.~~ Resolved — the risk was misdiagnosed.**
+This was planned around on the belief that Community Cloud capped at 3.13 and that
+`runtime.txt` would pin it. Both turned out to be wrong: Cloud supports 3.10–3.14, and it
+**ignores `runtime.txt` entirely** — the version comes from a dropdown in the Advanced
+settings dialog at app-creation time and cannot be changed afterwards without deleting and
+redeploying. The deployment therefore targets **3.14**, matching the local 3.14.2, and
+`runtime.txt` is kept only as a record of the tested interpreter. The real deployment-day
+surprise was not the version but the mechanism.
 
 **Heroku has no free tier.** The brief names Heroku as a deployment option, but free dynos
 were discontinued in November 2022. Streamlit Community Cloud is free and purpose-built for

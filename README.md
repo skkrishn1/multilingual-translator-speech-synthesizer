@@ -191,14 +191,24 @@ rate limits, non-retry for bad keys, and the translate-but-cannot-speak case.
 Deployed on **Streamlit Community Cloud**:
 
 1. Push the repository to GitHub (public).
-2. At <https://share.streamlit.io>, create an app pointing at `app.py`.
-3. In **Advanced settings → Secrets**, add:
-   ```toml
-   GEMINI_API_KEY = "your-key-here"
-   ```
+2. At <https://share.streamlit.io>, create an app pointing at `app.py` on branch `main`.
+3. Open **Advanced settings** *before* deploying and set both:
+   - **Python version** — 3.14, matching the interpreter the test suite runs on.
+   - **Secrets**:
+     ```toml
+     GEMINI_API_KEY = "your-key-here"
+     ```
 4. Deploy, then test each file format and several languages on the live URL.
 
-`runtime.txt` pins Python 3.13 because Streamlit Cloud does not yet offer 3.14.
+**The Python version must be chosen in the Advanced settings dialog, not in a file.**
+Streamlit Community Cloud ignores `runtime.txt` — it is a Heroku convention that the Cloud
+build system does not read, a point on which its own docs are silent and which is a
+[recurring source of failed deploys](https://github.com/streamlit/streamlit/issues/15326).
+The file is kept here because it records the tested interpreter and would be honoured by a
+Heroku-style host, but on Community Cloud the dropdown is the only thing that decides.
+It also cannot be changed after the fact: switching Python versions means deleting the app
+and redeploying, so it is worth getting right on the first attempt. The custom subdomain is
+released immediately on deletion and can be reclaimed, but the secrets must be re-entered.
 
 The project brief names Heroku as a deployment option. Heroku discontinued its free dyno
 tier in November 2022, so Streamlit Community Cloud was substituted — it is free and
@@ -250,8 +260,12 @@ nothing, and the app says so rather than translating an empty string. OCR is out
 **Voice quality is uniform.** gTTS offers one voice per language; `tld` varies the accent
 (for example British versus American English) but not the speaker.
 
-**Python 3.14 locally, 3.13 deployed.** Everything resolves on 3.14, but Streamlit Cloud
-caps at 3.13, so `runtime.txt` pins the lower version.
+**The deployed Python version is fixed at creation time.** Community Cloud takes the
+version from a dropdown when the app is created and offers no way to change it afterwards —
+switching means deleting the app and redeploying. The version here is 3.14, matching the
+3.14.2 the test suite runs on, so the 72 passing tests describe the deployed interpreter
+rather than an approximation of it. Every pinned dependency publishes a Linux wheel for
+3.13 and 3.14 alike, so the choice was not forced by packaging.
 
 ---
 
