@@ -64,6 +64,12 @@ synthesis time.
 Without session state, downloading the MP3 re-calls Gemini and gTTS on every click, burning
 free-tier quota. Compute once on button press, store, and let the rest of the script read.
 
+**Long runs must report progress.** `translate()` takes `progress_callback(done, total)`
+and `status_callback(message)`; `app.py` passes both through `cached_translate` as
+underscore-prefixed args so they stay out of the cache key. A shipped bug created the
+progress bar but never updated it, so multi-chunk documents looked hung — accepting a
+callback is not the same as wiring it up.
+
 **Cache keyed on content.** `@st.cache_data` wraps translation and synthesis. The text is
 passed as an underscore-prefixed arg so Streamlit excludes it from the key, leaving
 `(sha256(text), target)` as the actual cache key.
@@ -85,10 +91,15 @@ one chunk and assert nothing.
 
 ## Known constraints to design around
 
-- **Gemini free tier** rate-limits per minute and per day; a long document split into many
-  chunks fires them in quick succession and *will* 429 (reproduced on a 4.8k-char file).
-  Retries honour the API's `RetryInfo` delay rather than guessing — don't replace that with
-  plain exponential backoff, which gives up before a per-minute window reopens.
+- **Gemini free tier: the binding limit is per DAY, per MODEL** — measured at 20/day for
+  `gemini-3.6-flash`. Each chunk is one request, so one long upload burns a lot of it.
+  A 429 must be classified before acting: `_daily_quota_exhausted()` reads the
+  `QuotaFailure` violation's `quotaId` for `PerDay`. Daily → switch model immediately (the
+  quota is per model, so sleeping is useless and the API's `retryDelay` hint misleads).
+  Per-minute → sleep the `RetryInfo` delay and retry the same model. Don't collapse these
+  two paths back together.
+- `_unavailable` in `translator.py` memoises dead models per process. Tests reset it via
+  the autouse `fresh_model_availability` fixture — module state leaks between tests.
 - **Models get retired.** `gemini-2.5-flash` 404'd for new keys mid-project. `MODEL_NAME` +
   `FALLBACK_MODELS` in `config.py` form a chain the translator advances through on 404.
   `thinking_budget=0` is an *invalid argument* on Gemini 3 models — don't reintroduce it.

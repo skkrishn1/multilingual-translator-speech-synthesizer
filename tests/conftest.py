@@ -86,3 +86,13 @@ def no_api_key(monkeypatch):
 def no_sleep(monkeypatch):
     """Make retry backoff instant so the suite stays fast."""
     monkeypatch.setattr("time.sleep", lambda _seconds: None)
+
+
+@pytest.fixture(autouse=True)
+def fresh_model_availability():
+    """The translator remembers exhausted models process-wide; isolate each test from that."""
+    from src.translator import reset_model_availability
+
+    reset_model_availability()
+    yield
+    reset_model_availability()

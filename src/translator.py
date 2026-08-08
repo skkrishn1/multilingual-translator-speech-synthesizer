@@ -43,6 +43,32 @@ _RETRYABLE_CODES = frozenset({429, 500, 502, 503, 504})
 _MAX_RETRY_SLEEP = 45.0
 
 
+def _error_details(exc: Exception) -> list:
+    """The google.rpc detail entries attached to an APIError, if any."""
+    details = getattr(exc, "details", None)
+    if isinstance(details, dict):
+        error = details.get("error", details)
+        if isinstance(error, dict):
+            return error.get("details", []) or []
+    return []
+
+
+def _daily_quota_exhausted(exc: Exception) -> bool:
+    """True when a 429 is the per-day free-tier cap rather than a per-minute burst.
+
+    The distinction decides everything: a per-minute limit clears in under a minute, so
+    sleeping is right. The per-day cap does not clear until the quota window rolls over,
+    so sleeping is useless — but the cap is per *model*, so switching models does work.
+    """
+    for entry in _error_details(exc):
+        if not isinstance(entry, dict) or "QuotaFailure" not in str(entry.get("@type", "")):
+            continue
+        for violation in entry.get("violations", []) or []:
+            if "PerDay" in str(violation.get("quotaId", "")):
+                return True
+    return False
+
+
 def _retry_delay(exc: Exception, attempt: int) -> float:
     """How long to wait before the next attempt.
 
@@ -51,14 +77,7 @@ def _retry_delay(exc: Exception, attempt: int) -> float:
     backoff from a small base gives up seconds before the quota would have refreshed.
     Falls back to exponential backoff when no hint is present.
     """
-    details = getattr(exc, "details", None)
-    entries = []
-    if isinstance(details, dict):
-        error = details.get("error", details)
-        if isinstance(error, dict):
-            entries = error.get("details", []) or []
-
-    for entry in entries:
+    for entry in _error_details(exc):
         if not isinstance(entry, dict) or "RetryInfo" not in str(entry.get("@type", "")):
             continue
         raw = str(entry.get("retryDelay", "")).strip().rstrip("s")
@@ -76,6 +95,18 @@ class TranslationError(Exception):
 
 class _ModelUnavailable(Exception):
     """Internal: this model is retired or unknown, so try the next one in the chain."""
+
+
+#: Models known to be out of daily quota or retired, remembered for this process only.
+#: Without this, every chunk of a long document re-tries each dead model first — 20 wasted
+#: round trips on a 10-chunk file. Cleared on restart, which is the right granularity: the
+#: daily quota resets on its own cycle and a fresh process should check again.
+_unavailable: set[str] = set()
+
+
+def reset_model_availability() -> None:
+    """Forget which models were unavailable. Exposed for tests and manual recovery."""
+    _unavailable.clear()
 
 
 class _GenerativeClient(Protocol):
@@ -172,6 +203,7 @@ def translate(
     target_language: str,
     client: _GenerativeClient | None = None,
     progress_callback=None,
+    status_callback=None,
 ) -> str:
     """Translate `text` into `target_language`, chunking long input.
 
@@ -180,6 +212,8 @@ def translate(
         target_language: Language name as Gemini should read it (from `languages.py`).
         client: Injected client; built from config when omitted. Tests pass a stub.
         progress_callback: Optional callable(done, total) invoked after each chunk.
+        status_callback: Optional callable(message) invoked before a retry sleep, so a UI
+            can explain a long pause instead of appearing frozen.
 
     Returns:
         The translated text, chunks rejoined in original order.
@@ -205,23 +239,47 @@ def translate(
 
     translated = []
     for index, chunk in enumerate(chunks, start=1):
-        translated.append(_translate_chunk(active, chunk, target_language))
+        translated.append(
+            _translate_chunk(active, chunk, target_language, status_callback, index, len(chunks))
+        )
         if progress_callback:
             progress_callback(index, len(chunks))
 
     return "\n\n".join(translated)
 
 
-def _translate_chunk(client: _GenerativeClient, chunk: str, target_language: str) -> str:
+def _translate_chunk(
+    client: _GenerativeClient,
+    chunk: str,
+    target_language: str,
+    status_callback=None,
+    index: int = 1,
+    total: int = 1,
+) -> str:
     """Translate one chunk, falling through the model chain if a model has been retired."""
+    chain = [m for m in (MODEL_NAME, *FALLBACK_MODELS) if m not in _unavailable]
+    if not chain:
+        # Everything was exhausted earlier in this run; re-check rather than hard-fail.
+        reset_model_availability()
+        chain = [MODEL_NAME, *FALLBACK_MODELS]
+
     last_error: Exception | None = None
-    for model in (MODEL_NAME, *FALLBACK_MODELS):
+    for model in chain:
         try:
-            return _attempt(client, chunk, target_language, model)
+            return _attempt(client, chunk, target_language, model, status_callback, index, total)
         except _ModelUnavailable as exc:
+            _unavailable.add(model)
             last_error = exc
             continue
 
+    if "daily quota" in str(last_error):
+        raise TranslationError(
+            "Every available model has used up its free-tier requests for today. The free "
+            "tier allows a limited number of requests per model per day, and this counts "
+            "each part of a long document separately. The quota resets on a daily cycle — "
+            "try again later, translate shorter extracts, or enable billing in Google AI "
+            "Studio for higher limits."
+        )
     raise TranslationError(
         "None of the configured Gemini models are available to this API key — they have "
         f"most likely been retired. Update MODEL_NAME in src/config.py. ({last_error})"
@@ -229,7 +287,13 @@ def _translate_chunk(client: _GenerativeClient, chunk: str, target_language: str
 
 
 def _attempt(
-    client: _GenerativeClient, chunk: str, target_language: str, model: str
+    client: _GenerativeClient,
+    chunk: str,
+    target_language: str,
+    model: str,
+    status_callback=None,
+    index: int = 1,
+    total: int = 1,
 ) -> str:
     """Call one model, retrying with exponential backoff on transient failures."""
     config = types.GenerateContentConfig(
@@ -257,8 +321,25 @@ def _attempt(
             if code == 404:
                 # Retired or unknown model — no amount of retrying helps; try the next one.
                 raise _ModelUnavailable(f"{model}: {exc}") from exc
+            if code == 429 and _daily_quota_exhausted(exc):
+                # This model is out of free-tier requests for the day. The cap is per
+                # model, so the next one in the chain may still have budget. Waiting
+                # would not help; the API's retryDelay hint is misleading here.
+                if status_callback:
+                    status_callback(
+                        f"Daily free-tier limit reached for {model} — switching to a "
+                        "backup model…"
+                    )
+                raise _ModelUnavailable(f"{model} daily quota exhausted: {exc}") from exc
             if code in _RETRYABLE_CODES and attempt < MAX_RETRIES - 1:
-                time.sleep(_retry_delay(exc, attempt))
+                delay = _retry_delay(exc, attempt)
+                if status_callback:
+                    reason = "Rate limit reached" if code == 429 else "Gemini is busy"
+                    status_callback(
+                        f"{reason} — waiting {delay:.0f}s before retrying "
+                        f"part {index} of {total}…"
+                    )
+                time.sleep(delay)
                 continue
             raise TranslationError(_message_for(exc, code)) from exc
 
@@ -281,10 +362,16 @@ def _attempt(
 def _message_for(exc: Exception, code: int | None) -> str:
     """Map an SDK error onto something a user can act on."""
     if code == 429:
+        if _daily_quota_exhausted(exc):
+            return (
+                "The free-tier daily limit for this model has been reached. Unlike a "
+                "per-minute limit, waiting a few seconds will not help — the quota resets "
+                "on a daily cycle. Try a shorter extract later, or enable billing in "
+                "Google AI Studio for higher limits."
+            )
         return (
-            "Gemini's rate limit was hit. The free tier allows a limited number of requests "
-            "per minute and per day. Wait a minute and try again, or translate a shorter "
-            "piece of text."
+            "Gemini's per-minute rate limit was hit. Wait a minute and try again, or "
+            "translate a shorter piece of text."
         )
     if code in (401, 403):
         return (

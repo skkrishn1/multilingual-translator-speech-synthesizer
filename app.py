@@ -16,7 +16,7 @@ import streamlit as st
 from src import languages
 from src.config import MAX_FILE_MB, MAX_INPUT_CHARS, has_api_key
 from src.extractors import SUPPORTED_EXTENSIONS, ExtractionError, extract_text
-from src.translator import TranslationError, translate
+from src.translator import TranslationError, split_into_chunks, translate
 from src.tts import TTSError, synthesize
 
 st.set_page_config(
@@ -68,8 +68,10 @@ def _reset_results() -> None:
 
 
 @st.cache_data(show_spinner=False)
-def cached_translate(_text: str, text_hash: str, gemini_name: str) -> str:
-    return translate(_text, gemini_name)
+def cached_translate(
+    _text: str, text_hash: str, gemini_name: str, _progress=None, _status=None
+) -> str:
+    return translate(_text, gemini_name, progress_callback=_progress, status_callback=_status)
 
 
 @st.cache_data(show_spinner=False)
@@ -167,10 +169,14 @@ with upload_tab:
 
 if source_text:
     over_limit = len(source_text) > MAX_INPUT_CHARS
-    st.caption(
-        f"{len(source_text):,} characters"
-        + (f" — over the {MAX_INPUT_CHARS:,} limit" if over_limit else "")
-    )
+    parts = len(split_into_chunks(source_text))
+    detail = f"{len(source_text):,} characters"
+    if over_limit:
+        detail += f" — over the {MAX_INPUT_CHARS:,} limit"
+    elif parts > 1:
+        # Set expectations before the click: multi-part runs take noticeably longer.
+        detail += f" — will be translated in {parts} parts, so this will take a little longer"
+    st.caption(detail)
 
 translate_clicked = st.button(
     f"Translate into {target_display}",
@@ -181,9 +187,27 @@ translate_clicked = st.button(
 
 if translate_clicked:
     _reset_results()
-    progress = st.progress(0.0, text="Translating…")
+    total_chunks = max(1, len(split_into_chunks(source_text)))
+    opening = (
+        "Translating…" if total_chunks == 1
+        else f"Translating part 1 of {total_chunks}… (long text is split into parts)"
+    )
+    progress = st.progress(0.0, text=opening)
+    fraction = [0.0]  # mutable so both callbacks share the latest position
+
+    def on_progress(done: int, total: int) -> None:
+        fraction[0] = done / total
+        nxt = f"Translating part {done + 1} of {total}…" if done < total else "Finishing…"
+        progress.progress(fraction[0], text=nxt)
+
+    def on_status(message: str) -> None:
+        # A rate-limit wait can be 45s of silence; say so rather than look frozen.
+        progress.progress(fraction[0], text=message)
+
     try:
-        result = cached_translate(source_text, _digest(source_text), target.gemini_name)
+        result = cached_translate(
+            source_text, _digest(source_text), target.gemini_name, on_progress, on_status
+        )
     except TranslationError as exc:
         progress.empty()
         st.error(str(exc), icon="🚫")

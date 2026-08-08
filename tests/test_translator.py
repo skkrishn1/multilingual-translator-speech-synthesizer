@@ -35,7 +35,36 @@ class FakeClient:
 
 
 def rate_limited():
+    """A per-minute 429: no QuotaFailure detail naming a PerDay quota."""
     return errors.ClientError(429, {"error": {"message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+
+
+def daily_quota_exhausted():
+    """The 429 the free tier actually returns once a model's daily allowance is gone."""
+    return errors.ClientError(
+        429,
+        {
+            "error": {
+                "message": "quota exceeded",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [
+                            {
+                                "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                                "quotaValue": "20",
+                            }
+                        ],
+                    },
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": "37s",
+                    },
+                ],
+            }
+        },
+    )
 
 
 class TestChunking:
@@ -183,6 +212,80 @@ class TestErrorHandling:
         client = FakeClient([rate_limited(), "ok"])
         translate("Hello", "Hindi", client=client)
         assert slept == [8.0]
+
+    def test_daily_quota_switches_model_instead_of_sleeping(self, monkeypatch):
+        """The daily cap is per model, so the fix is a different model, not waiting."""
+        slept = []
+        monkeypatch.setattr("time.sleep", slept.append)
+        client = FakeClient([daily_quota_exhausted(), "ok"])
+        assert translate("Hello", "Hindi", client=client) == "ok"
+        assert slept == [], "sleeping cannot clear a daily quota"
+        assert [c["model"] for c in client.models.calls] == [MODEL_NAME, FALLBACK_MODELS[0]]
+
+    def test_daily_quota_does_not_waste_retries_on_the_same_model(self, monkeypatch):
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+        client = FakeClient([daily_quota_exhausted()])
+        with pytest.raises(TranslationError):
+            translate("Hello", "Hindi", client=client)
+        # One call per model in the chain — not MAX_RETRIES against each.
+        assert len(client.models.calls) == 1 + len(FALLBACK_MODELS)
+
+    def test_all_models_out_of_daily_quota_says_so_not_retired(self, monkeypatch):
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+        client = FakeClient([daily_quota_exhausted()])
+        with pytest.raises(TranslationError, match="free-tier requests for today"):
+            translate("Hello", "Hindi", client=client)
+
+    def test_daily_quota_message_does_not_tell_the_user_to_wait_a_minute(self, monkeypatch):
+        """The misleading advice this replaced: RetryInfo says 37s, but it is a daily cap."""
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+        client = FakeClient([daily_quota_exhausted()])
+        with pytest.raises(TranslationError) as caught:
+            translate("Hello", "Hindi", client=client)
+        assert "minute" not in str(caught.value).lower()
+
+    def test_per_minute_limit_still_sleeps_and_retries(self, monkeypatch):
+        slept = []
+        monkeypatch.setattr("time.sleep", slept.append)
+        client = FakeClient([rate_limited(), "ok"])
+        assert translate("Hello", "Hindi", client=client) == "ok"
+        assert slept, "a per-minute limit does clear by waiting"
+        assert [c["model"] for c in client.models.calls] == [MODEL_NAME, MODEL_NAME]
+
+    def test_exhausted_model_is_skipped_for_later_chunks(self, monkeypatch):
+        """A 10-chunk document must not re-try a dead model 10 times."""
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+        # Chunk 1: primary 429s, fallback succeeds. Later chunks should skip the primary.
+        client = FakeClient([daily_quota_exhausted(), "ok"])
+        text = "\n\n".join("word " * 500 for _ in range(3))
+        translate(text, "Hindi", client=client)
+
+        models_tried = [c["model"] for c in client.models.calls]
+        assert models_tried.count(MODEL_NAME) == 1, "dead model retried on later chunks"
+        assert len(models_tried) == 4, "expected 1 failed + 3 successful calls"
+
+    def test_availability_can_be_reset(self, monkeypatch):
+        from src.translator import reset_model_availability
+
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+        client = FakeClient([daily_quota_exhausted(), "ok"])
+        translate("Hello", "Hindi", client=client)
+        reset_model_availability()
+        client2 = FakeClient(["ok"])
+        translate("Hello again", "Hindi", client=client2)
+        assert client2.models.calls[0]["model"] == MODEL_NAME
+
+    def test_rate_limit_wait_is_announced_so_the_ui_is_not_silent(self):
+        """A 45s wait with no feedback is indistinguishable from a hung app."""
+        messages = []
+        client = FakeClient([rate_limited(), "ok"])
+        translate("Hello", "Hindi", client=client, status_callback=messages.append)
+        assert len(messages) == 1
+        assert "Rate limit" in messages[0] and "waiting" in messages[0]
+
+    def test_no_status_callback_is_harmless(self):
+        client = FakeClient([rate_limited(), "ok"])
+        assert translate("Hello", "Hindi", client=client) == "ok"
 
     def test_retired_model_falls_through_to_the_next_in_the_chain(self):
         """Google retired gemini-2.5-flash mid-project; a 404 must not surface to the user."""

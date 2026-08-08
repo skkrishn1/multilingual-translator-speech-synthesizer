@@ -212,13 +212,19 @@ purpose-built for this stack.
 translation, but no native speaker reviewed the non-English results. Gemini is strong at
 common language pairs and weaker at low-resource ones.
 
-**Gemini free-tier rate limits.** Limits are per minute and per day, and Google revises
-them, so the current values are worth checking in AI Studio rather than trusting a number
-written here. A long document becomes many chunks fired in quick succession, which is
-exactly the shape that hits a per-minute limit — this was reproduced during testing on a
-4,800-character document. Mitigated three ways: a 20,000-character cap per translation so
-one upload cannot consume the daily quota; retries that honour the `RetryInfo` delay the
-API returns rather than guessing; and a fallback to a lighter model.
+**Gemini free-tier quotas are small, and per model.** The binding constraint is not
+requests per minute but requests per *day*: measured at **20 per day per model** for
+`gemini-3.6-flash` during development (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`).
+Google revises these, so check AI Studio rather than trusting the number here. Because a
+long document is split into chunks and each chunk is one request, a single 10-part upload
+consumes half a day's allowance. Mitigated four ways: a 20,000-character cap per
+translation; a fallback chain across models, since the quota is per model and a second
+model has its own untouched allowance; retries that honour the API's `RetryInfo` delay for
+per-minute limits; and skipping models already known to be exhausted so a long document
+does not re-test them on every chunk. When the primary model is exhausted the app keeps
+working on a lighter fallback, which is slightly lower quality — degrading rather than
+failing is deliberate, but for an important run, translate after the quota resets or
+enable billing.
 
 **Models get retired.** `gemini-2.5-flash` was the original choice and became unavailable
 to new API keys during development, returning 404. `src/config.py` now names a current
@@ -297,6 +303,28 @@ the error text `Requests to this API ... are blocked` proves the API is enabled 
 because a bare 403 does not tell you which of those things went wrong: it probes with a
 model listing (which costs no generation quota), pattern-matches the error, and prints the
 specific fix.
+
+**An error message that pointed the wrong way.** Uploading a PDF produced a rate-limit
+error, and the obvious reading — too many requests too fast — was wrong. Inspecting the
+error's `QuotaFailure` detail rather than just its HTTP status showed
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, a *daily* cap of 20. The same response
+also carried `retryDelay: 37s`, which is actively misleading for a limit that resets on a
+daily cycle. The original code trusted the status code alone: it slept and retried the same
+exhausted model three times, never reaching a fallback that would have worked, and told the
+user to "wait a minute" for something a minute could not fix. The fix was to branch on the
+quota ID — per-minute limits still sleep and retry, while a daily cap switches model
+immediately, because the quota is per model. Exhausted models are then remembered for the
+session, since otherwise a ten-chunk document re-tests each dead model ten times. The
+lesson generalises: an HTTP status says a request failed, but the structured error detail
+says why, and only the latter distinguishes a wait from a dead end.
+
+**A progress bar that lied.** The same PDF report included "it got stuck". It had not — the
+UI created a progress bar and never passed the `progress_callback` that the translator
+already accepted, so it sat at 0% for the whole run. With typed text this was invisible,
+because one chunk finishes in about two seconds; only a multi-chunk document exposed it. A
+plausible-looking UI element that is never updated is worse than none at all, and it took a
+user's report rather than a test to catch, because the tests exercised the callback while
+the caller was what failed to use it.
 
 **A model disappearing mid-project.** `gemini-2.5-flash` appeared in the model listing but
 returned 404 on generation, with the message that it is "no longer available to new users"
