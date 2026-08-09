@@ -1,12 +1,18 @@
 # Multilingual Text Translator & Speech Synthesizer
 
-A Streamlit web app that translates text or uploaded documents into any of 50+ languages
-using Google's Gemini API, then speaks the translation aloud and offers it as a
-downloadable MP3.
+Turn any passage or document into a spoken translation across 50+ languages. Paste text or
+upload a PDF, TXT, CSV, or XLSX file — Google's Gemini 3.6 Flash translates it in
+order-preserving chunks, and gTTS voices the result as an MP3 you can play inline or
+download. Built in Python 3.14, with pypdf, pandas, and openpyxl handling document
+extraction, content-keyed caching so identical input is never re-translated, and
+quota-aware retries with automatic model fallback when the Gemini API rate-limits or
+retires a model. A single language registry keeps translation and speech in sync, so a
+language Gemini can translate but gTTS cannot speak still works — the app explains the gap
+instead of failing.
 
 Built for the Generative AI and ML capstone project.
 
-**Live app:**
+**Deployed on Streamlit Community Cloud:**
 <https://multilingual-translator-speech-synthesizer.streamlit.app/?embed=true>
 
 The link is permanent and needs no login. If it has been idle for more than 12 hours it
@@ -174,7 +180,7 @@ src/extractors.py       PDF / TXT / CSV / XLSX → plain text
 src/translator.py       Gemini wrapper: prompt, chunking, retries, error mapping
 src/tts.py              gTTS wrapper: text → MP3 bytes
 scripts/check_api_key.py  one-call key verification
-tests/                  57 unit tests, no network required
+tests/                  72 unit tests, no network required
 sample_files/           fixtures for the manual test matrix
 ```
 
