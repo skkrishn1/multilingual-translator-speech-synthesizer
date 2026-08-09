@@ -12,6 +12,7 @@ import hashlib
 import html
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src import languages
 from src.config import MAX_FILE_MB, MAX_INPUT_CHARS, has_api_key
@@ -59,8 +60,8 @@ st.markdown(
          badge is _profileContainer_gzau3_53 in the top document, while the app is at
          /~/+/ in _iframe_aycw8_26.
 
-         The supported way to drop that chrome is the ?embed=true query parameter, which
-         is documented in the README as the link to share. */
+         ?embed=true removes most of that chrome, but not the profile badge, so the badge
+         is dealt with by the script below instead. */
       [data-testid="stToolbarActions"],
       [data-testid="stActionButton"],
       .stActionButton {
@@ -69,6 +70,60 @@ st.markdown(
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+# Hide the Community Cloud "created by <github user>" badge, which shows the developer's
+# GitHub profile to every visitor.
+#
+# CSS cannot do this: the badge lives in the page that hosts the app's iframe, and a
+# stylesheet injected via st.markdown applies only inside that iframe. JavaScript can,
+# because the iframe and its host are the same origin — so window.parent.document is
+# reachable rather than blocked by the same-origin policy. st.markdown strips <script>,
+# so the script is delivered through components.html, which is itself an iframe; hence
+# the loop climbing through each ancestor rather than assuming a fixed depth.
+#
+# This is unsupported by definition — it reaches into markup the platform owns. It is
+# written to fail silently and locally: the try/except around each ancestor stops the
+# climb the moment a document is not accessible, so a future change that makes the host
+# cross-origin costs a no-op rather than a broken app. The interval handles the badge
+# being re-inserted after the app re-runs. Nothing here touches app behaviour.
+components.html(
+    """
+    <script>
+    (function () {
+      var SELECTOR = [
+        '[class*="profileContainer"]',
+        '[class*="profileLink"]',
+        '[class*="viewerBadge"]',
+        'a[href*="github.com"]'
+      ].join(',');
+
+      function hideIn(doc) {
+        var nodes = doc.querySelectorAll(SELECTOR);
+        for (var i = 0; i < nodes.length; i++) {
+          nodes[i].style.setProperty('display', 'none', 'important');
+        }
+      }
+
+      function hide() {
+        var win = window;
+        for (var depth = 0; depth < 5; depth++) {
+          if (win.parent === win) { break; }
+          win = win.parent;
+          try {
+            hideIn(win.document);
+          } catch (err) {
+            break;
+          }
+        }
+      }
+
+      hide();
+      setInterval(hide, 500);
+    })();
+    </script>
+    """,
+    height=0,
 )
 
 # --- Session state ---------------------------------------------------------------------
