@@ -6,11 +6,17 @@ downloadable MP3.
 
 Built for the Generative AI and ML capstone project.
 
-**Live app:** <https://multilingual-translator-speech-synthesizer.streamlit.app/>
+**Live app:**
+<https://multilingual-translator-speech-synthesizer.streamlit.app/?embed=true>
 
 The link is permanent and needs no login. If it has been idle for more than 12 hours it
 will show a "get this app back up" button — click it and the app returns in about half a
 minute. See [App availability](#app-availability) for what that means for reviewers.
+
+The `?embed=true` suffix is deliberate. Community Cloud wraps a hosted app in its own
+chrome — a GitHub link and a "created by" badge carrying the developer's profile — and
+embed mode drops it, so the page opens as the application rather than as somebody's
+repository. The bare URL works identically and simply shows that chrome.
 
 ---
 

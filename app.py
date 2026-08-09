@@ -46,30 +46,24 @@ st.markdown(
         font-size: 1.15rem;
         line-height: 2;
       }
-      /* Community Cloud injects two things this app does not want: a GitHub badge in the
-         header, and a floating "created by <github user>" profile badge near the bottom of
-         the page. Both are added by the hosting platform rather than by Streamlit's own
-         chrome, so client.toolbarMode does not reach them and no config option exists —
-         CSS is the only lever.
+      /* Streamlit's own in-app toolbar actions. These are inside the app, so CSS reaches
+         them; client.toolbarMode = "minimal" in config.toml covers the same ground, and
+         this is belt-and-braces.
 
-         The href selectors are the durable ones: they match on where a link points rather
-         than on a generated class name. Community Cloud hashes its badge classes
-         (viewerBadge_container__1QSob, _profileContainer_gzau3_53), and the hash changes
-         between releases, so those are matched by substring instead of exactly. This all
-         targets internal DOM that carries no compatibility guarantee — if a badge
-         reappears after a Streamlit upgrade, this block is the first place to look.
+         Note what is deliberately NOT attempted here. Community Cloud serves the app
+         inside an iframe and renders its own chrome — the GitHub badge, the
+         "created by <user>" profile badge, "Manage app", "Built with Streamlit" — in the
+         parent page as siblings of that iframe. A stylesheet injected through st.markdown
+         executes inside the iframe and cannot style the parent document, so no selector
+         written here can ever hide those. Verified by inspecting the deployed page: the
+         badge is _profileContainer_gzau3_53 in the top document, while the app is at
+         /~/+/ in _iframe_aycw8_26.
 
-         The app renders no links of its own, so matching github.com page-wide is safe. */
+         The supported way to drop that chrome is the ?embed=true query parameter, which
+         is documented in the README as the link to share. */
       [data-testid="stToolbarActions"],
       [data-testid="stActionButton"],
-      .stActionButton,
-      [class*="viewerBadge"],
-      [class*="profileContainer"],
-      [class*="profileLink"],
-      a[href*="github.com"],
-      a[href*="share.streamlit.io"],
-      a[href*="streamlit.io/cloud"],
-      footer {
+      .stActionButton {
         display: none !important;
       }
     </style>
