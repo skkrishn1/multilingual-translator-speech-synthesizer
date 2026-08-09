@@ -46,6 +46,21 @@ st.markdown(
         font-size: 1.15rem;
         line-height: 2;
       }
+      /* Community Cloud injects a GitHub / "Hosted with Streamlit" badge into the app
+         header. It is added by the hosting platform rather than by Streamlit's own chrome,
+         so client.toolbarMode does not reach it and there is no config option for it — CSS
+         is the only lever. These selectors target Streamlit's internal DOM, which carries
+         no compatibility guarantee: if the badge reappears after a Streamlit upgrade, this
+         block is the first place to look. The href selector is the durable one, since it
+         matches on meaning rather than on a generated class name. */
+      [data-testid="stToolbarActions"],
+      [data-testid="stActionButton"],
+      .stActionButton,
+      [class*="viewerBadge"],
+      header a[href*="github.com"],
+      header a[href*="share.streamlit.io"] {
+        display: none !important;
+      }
     </style>
     """,
     unsafe_allow_html=True,
