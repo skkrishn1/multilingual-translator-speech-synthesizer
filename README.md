@@ -37,7 +37,8 @@ repository. The bare URL works identically and simply shows that chrome.
 
 ### 1. Requirements
 
-Python 3.11–3.13 (see the note on 3.14 under [Limitations](#limitations)).
+Python 3.11–3.14. The test suite and the deployed app both run on 3.14, so that is the
+version to prefer.
 
 ### 2. Install
 
@@ -45,7 +46,7 @@ Python 3.11–3.13 (see the note on 3.14 under [Limitations](#limitations)).
 git clone <your-repo-url>
 cd Capstone_Project
 
-py -3.13 -m venv .venv
+py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
