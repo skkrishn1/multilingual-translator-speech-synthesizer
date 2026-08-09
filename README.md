@@ -39,6 +39,23 @@ repository. The bare URL works identically and simply shows that chrome.
 
 ---
 
+## Tech stack
+
+| Layer | Library |
+| --- | --- |
+| UI and hosting | Streamlit 1.61 → Streamlit Community Cloud |
+| Translation | google-genai 2.17 → Gemini 3.6 Flash, with two fallback models |
+| Speech | gTTS 2.5 |
+| Document extraction | pypdf 6.15 (PDF); pandas 3.0 with openpyxl 3.1 (CSV, XLSX) |
+| Configuration | python-dotenv 1.2 locally, `st.secrets` on Cloud |
+| Testing | pytest 9.1 — 72 tests, no API key or network required |
+
+Versions are pinned in `requirements.txt`. `openpyxl` is never imported directly; pandas
+uses it as the engine that reads `.xlsx`. The fallback chain is `gemini-3.6-flash` →
+`gemini-flash-latest` → `gemini-3.5-flash-lite`, defined in `src/config.py`.
+
+---
+
 ## Setup
 
 ### 1. Requirements
