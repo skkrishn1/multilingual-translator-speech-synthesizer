@@ -138,11 +138,15 @@ and rejoins in order. `tts.py` does the same for audio and concatenates the MP3 
 
 ### Phase 5 — Deployment
 
-- Push to a public GitHub repository
-- Deploy on **Streamlit Community Cloud** (free); add the API key via the Secrets UI
-- Select the Python version in the **Advanced settings** dialog when creating the app —
-  `runtime.txt` is ignored by Community Cloud; see the risk note below
-- Verify the deployed app end-to-end
+- [x] Push to a public GitHub repository
+- [x] Deploy on **Streamlit Community Cloud** (free); add the API key via the Secrets UI —
+  live at <https://multilingual-translator-speech-synthesizer.streamlit.app/>
+- [x] Select the Python version in the **Advanced settings** dialog when creating the app —
+  `runtime.txt` is ignored by Community Cloud; see the risk note below. Deployed on 3.14.
+- [x] Set viewer access to **public** so reviewers need no Streamlit account — verified by
+  a third party opening the link in their own browser
+- [ ] Verify the deployed app end-to-end across all four file formats, a language with a
+  gTTS voice and one without
 
 ### Phase 6 — Documentation
 

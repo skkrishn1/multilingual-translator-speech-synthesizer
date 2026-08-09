@@ -6,6 +6,12 @@ downloadable MP3.
 
 Built for the Generative AI and ML capstone project.
 
+**Live app:** <https://multilingual-translator-speech-synthesizer.streamlit.app/>
+
+The link is permanent and needs no login. If it has been idle for more than 12 hours it
+will show a "get this app back up" button — click it and the app returns in about half a
+minute. See [App availability](#app-availability) for what that means for reviewers.
+
 ---
 
 ## What it does
@@ -188,7 +194,12 @@ rate limits, non-retry for bad keys, and the translate-but-cannot-speak case.
 
 ## Deployment
 
-Deployed on **Streamlit Community Cloud**:
+Deployed and live at
+<https://multilingual-translator-speech-synthesizer.streamlit.app/>, on
+**Streamlit Community Cloud**, with viewer access set to public so no reviewer needs a
+Streamlit account.
+
+The steps that produced it:
 
 1. Push the repository to GitHub (public).
 2. At <https://share.streamlit.io>, create an app pointing at `app.py` on branch `main`.
@@ -213,6 +224,37 @@ released immediately on deletion and can be reclaimed, but the secrets must be r
 The project brief names Heroku as a deployment option. Heroku discontinued its free dyno
 tier in November 2022, so Streamlit Community Cloud was substituted — it is free and
 purpose-built for this stack.
+
+### App availability
+
+**The URL does not expire.** It stays valid for as long as this GitHub repository stays
+public and the Streamlit account exists. There is no trial window and no billing clock, so
+a reviewer can open the link weeks after submission and it will still resolve.
+
+What does change is whether the app is *running* at that moment. Community Cloud hibernates
+any app that receives no traffic for **12 hours**, to share capacity across the free tier.
+A visitor arriving at a sleeping app is not shown an error — they get a page with a
+**"Yes, get this app back up!"** button, and **any visitor can press it**, not only the
+owner. The app rebuilds and is usable in roughly 30 seconds. Sleeping is therefore a delay,
+not an outage, and it needs no action from the author.
+
+Two consequences are worth stating plainly, because both are easy to mistake for bugs:
+
+- **Waking clears the cache.** `@st.cache_data` lives in the app process, so a wake-up
+  starts with an empty cache. The first translation after an idle period costs a real
+  Gemini call even if the identical text was translated before.
+- **An HTTP ping will not keep the app awake.** A sleeping app still answers plain `GET`
+  requests with `200`, because waking is driven by the websocket a real browser opens.
+  Uptime-monitor keep-alives consequently do nothing; only genuine browser visits reset the
+  12-hour timer.
+
+The binding constraint on a live demo is quota rather than uptime. The Gemini free tier
+allows roughly 20 requests per day *per model* and every chunk is one request, so a class
+of reviewers all translating long documents on the same day can exhaust it. The fallback
+chain in `src/config.py` softens this — daily exhaustion on one model advances to the next
+rather than failing — but the honest ceiling is tens of translations per day, not hundreds.
+A reviewer who hits it sees the app's quota message, which is the app behaving correctly
+rather than breaking.
 
 ---
 
@@ -259,6 +301,13 @@ nothing, and the app says so rather than translating an empty string. OCR is out
 
 **Voice quality is uniform.** gTTS offers one voice per language; `tld` varies the accent
 (for example British versus American English) but not the speaker.
+
+**The hosted app hibernates when idle.** Community Cloud puts any app to sleep after 12
+hours without traffic, so a link opened cold takes about 30 seconds and one button press to
+come back. The URL itself never expires and no reviewer is locked out — see
+[App availability](#app-availability) — but the app cannot be guaranteed to respond
+instantly to an unannounced visit. A paid host with an always-on dyno would remove this;
+the free tier is a deliberate trade for zero running cost.
 
 **The deployed Python version is fixed at creation time.** Community Cloud takes the
 version from a dropdown when the app is created and offers no way to change it afterwards —

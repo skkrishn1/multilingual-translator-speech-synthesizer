@@ -5,9 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project status
 
 Phases 0–4 and 6 of `PLAN.md` are done: all modules, the UI, 72 passing tests, sample
-fixtures, and the README. Phase 5 is in progress — the code is pushed to the public GitHub
-repo; outstanding is the Streamlit Cloud deploy itself and live end-to-end verification
-with a real API key. `PLAN.md` remains the design spec — update it if a decision changes.
+fixtures, and the README. Phase 5 is deployed and public at
+<https://multilingual-translator-speech-synthesizer.streamlit.app/> — Python 3.14, key in
+the Cloud Secrets panel, sharing set to "public and searchable" and confirmed by a third
+party in their own browser. Outstanding: the live end-to-end pass across all four file
+formats and a language without a gTTS voice.
+
+Do not use `curl` to test whether the deployed app is publicly reachable. Streamlit's auth
+endpoint issues an anonymous session cookie and bounces browsers back to the app, so a
+cookie-less client sees a `303` to `/-/login` and looks locked out when it is not. Test in
+a private browsing window, or ask someone else to open the link. `PLAN.md` remains the design spec — update it if a decision changes.
 
 This is a graded PGP capstone. The brief requires a documentation deliverable covering
 setup, the Gemini API key, **limitations**, and **challenges faced** — the last two are
