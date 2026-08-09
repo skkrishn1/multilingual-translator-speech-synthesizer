@@ -46,19 +46,30 @@ st.markdown(
         font-size: 1.15rem;
         line-height: 2;
       }
-      /* Community Cloud injects a GitHub / "Hosted with Streamlit" badge into the app
-         header. It is added by the hosting platform rather than by Streamlit's own chrome,
-         so client.toolbarMode does not reach it and there is no config option for it — CSS
-         is the only lever. These selectors target Streamlit's internal DOM, which carries
-         no compatibility guarantee: if the badge reappears after a Streamlit upgrade, this
-         block is the first place to look. The href selector is the durable one, since it
-         matches on meaning rather than on a generated class name. */
+      /* Community Cloud injects two things this app does not want: a GitHub badge in the
+         header, and a floating "created by <github user>" profile badge near the bottom of
+         the page. Both are added by the hosting platform rather than by Streamlit's own
+         chrome, so client.toolbarMode does not reach them and no config option exists —
+         CSS is the only lever.
+
+         The href selectors are the durable ones: they match on where a link points rather
+         than on a generated class name. Community Cloud hashes its badge classes
+         (viewerBadge_container__1QSob, _profileContainer_gzau3_53), and the hash changes
+         between releases, so those are matched by substring instead of exactly. This all
+         targets internal DOM that carries no compatibility guarantee — if a badge
+         reappears after a Streamlit upgrade, this block is the first place to look.
+
+         The app renders no links of its own, so matching github.com page-wide is safe. */
       [data-testid="stToolbarActions"],
       [data-testid="stActionButton"],
       .stActionButton,
       [class*="viewerBadge"],
-      header a[href*="github.com"],
-      header a[href*="share.streamlit.io"] {
+      [class*="profileContainer"],
+      [class*="profileLink"],
+      a[href*="github.com"],
+      a[href*="share.streamlit.io"],
+      a[href*="streamlit.io/cloud"],
+      footer {
         display: none !important;
       }
     </style>
