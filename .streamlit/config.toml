@@ -12,3 +12,10 @@ textColor = "#E6E9EF"
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# Hide the developer entries in the top-right menu ("Clear cache", "Deploy this app") and
+# the Community Cloud source links, so a reviewer sees the app rather than its plumbing.
+# "minimal" keeps only options set explicitly via st.set_page_config. Note this hides the
+# link, not the code — the repository is public either way.
+toolbarMode = "minimal"
