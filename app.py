@@ -72,26 +72,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Hide the Community Cloud "created by <github user>" badge, which shows the developer's
-# GitHub profile to every visitor.
-#
-# CSS cannot do this: the badge lives in the page that hosts the app's iframe, and a
-# stylesheet injected via st.markdown applies only inside that iframe. JavaScript can,
-# because the iframe and its host are the same origin — so window.parent.document is
-# reachable rather than blocked by the same-origin policy. st.markdown strips <script>,
-# so the script is delivered through components.html, which is itself an iframe; hence
-# the loop climbing through each ancestor rather than assuming a fixed depth.
-#
-# This is unsupported by definition — it reaches into markup the platform owns. It is
-# written to fail silently and locally: the try/except around each ancestor stops the
-# climb the moment a document is not accessible, so a future change that makes the host
-# cross-origin costs a no-op rather than a broken app. Nothing here touches app behaviour.
-#
-# It cannot remove the badge from the very first paint. The host page renders the badge as
-# soon as it loads, and this script cannot run until the app's websocket has connected and
-# Streamlit has rendered the component iframe — strictly later. So a brief flash on a cold
-# load is inherent to doing this from inside the app, not a bug in the code below. The
-# stylesheet approach keeps that to the initial paint only; every later rerun is clean.
 components.html(
     """
     <script>
