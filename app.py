@@ -85,41 +85,51 @@ st.markdown(
 # This is unsupported by definition — it reaches into markup the platform owns. It is
 # written to fail silently and locally: the try/except around each ancestor stops the
 # climb the moment a document is not accessible, so a future change that makes the host
-# cross-origin costs a no-op rather than a broken app. The interval handles the badge
-# being re-inserted after the app re-runs. Nothing here touches app behaviour.
+# cross-origin costs a no-op rather than a broken app. Nothing here touches app behaviour.
+#
+# It cannot remove the badge from the very first paint. The host page renders the badge as
+# soon as it loads, and this script cannot run until the app's websocket has connected and
+# Streamlit has rendered the component iframe — strictly later. So a brief flash on a cold
+# load is inherent to doing this from inside the app, not a bug in the code below. The
+# stylesheet approach keeps that to the initial paint only; every later rerun is clean.
 components.html(
     """
     <script>
     (function () {
-      var SELECTOR = [
-        '[class*="profileContainer"]',
-        '[class*="profileLink"]',
-        '[class*="viewerBadge"]',
-        'a[href*="github.com"]'
-      ].join(',');
+      // A stylesheet rather than inline styles on matched nodes: a rule in the host's head
+      // applies to elements inserted later too, so a badge re-added on rerun never becomes
+      // visible. Setting node.style only hides what already exists, leaving a flash until
+      // the next poll.
+      var CSS = '[class*="profileContainer"],[class*="profileLink"],' +
+                '[class*="viewerBadge"],a[href*="github.com"]' +
+                '{display:none !important;}';
+      var STYLE_ID = 'hide-cloud-creator-badge';
 
-      function hideIn(doc) {
-        var nodes = doc.querySelectorAll(SELECTOR);
-        for (var i = 0; i < nodes.length; i++) {
-          nodes[i].style.setProperty('display', 'none', 'important');
-        }
+      function inject(doc) {
+        if (doc.getElementById(STYLE_ID)) { return; }
+        var style = doc.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (doc.head || doc.documentElement).appendChild(style);
       }
 
-      function hide() {
+      function apply() {
         var win = window;
         for (var depth = 0; depth < 5; depth++) {
           if (win.parent === win) { break; }
           win = win.parent;
           try {
-            hideIn(win.document);
+            inject(win.document);
           } catch (err) {
             break;
           }
         }
       }
 
-      hide();
-      setInterval(hide, 500);
+      apply();
+      // Cheap: after the first call this is an ID lookup that returns immediately. It only
+      // does work again if the host replaces its head and drops the rule.
+      setInterval(apply, 1000);
     })();
     </script>
     """,
